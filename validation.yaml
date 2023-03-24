@@ -1,0 +1,46 @@
+---
+- hosts: NTT
+  become: yes
+  become_method: sudo
+  gather_facts: no
+  user: ansadmin
+  tasks:
+  - name: Server Hostname
+    shell: hostname
+    register: hostname_output
+  - name: Transfer the script executable to the server
+    copy: src=/root/ansible/project/checklist.sh dest=/tmp/ mode=0777
+  - name: Prechecks script performance
+    async: 10
+    poll: 0
+    shell: "./checklist.sh > /tmp/{{inventory_hostname}}.txt"
+    args:
+      chdir: /tmp/
+  - name: find the output file
+    shell: (cd /tmp/; find *.txt)
+    register: files_to_copy
+  - name: show the result file
+    shell: "cat /tmp/{{inventory_hostname}}.txt"
+    register: files_to_copy
+  - name: Hostname directory
+    file:
+       path: "/root/ansible/validate_reports/{{ hostname_output.stdout }}"
+       state: directory
+    delegate_to: localhost
+  - name: find the output file
+    shell: ls /root/ansible/validate_reports/{{ hostname_output.stdout }}/
+    register: files_to_copies
+    delegate_to: localhost
+  - local_action: copy content={{ files_to_copy.stdout }}  dest=/root/ansible/validate_reports/{{ hostname_output.stdout }}/{{inventory_hostname}}_prechecks.txt
+    when: files_to_copies.stdout  == ""
+  - local_action: copy content={{ files_to_copy.stdout }}  dest=/root/ansible/validate_reports/{{ hostname_output.stdout }}/{{inventory_hostname}}_postchecks.txt
+    register: post_execute
+    when: files_to_copies.stdout.find(".txt") != -1
+  - name: Differnce output
+    shell: diff -y --suppress-common-lines /root/ansible/validate_reports/{{hostname_output.stdout}}/{{inventory_hostname}}_prechecks.txt /root/ansible/validate_reports/{{hostname_output.stdout}}/{{inventory_hostname}}_postchecks.txt | grep -vwE "(load)"
+    delegate_to: localhost
+    register: command_output
+    when: post_execute is defined
+    ignore_errors: yes
+  - debug:
+        var: command_output.stdout_lines

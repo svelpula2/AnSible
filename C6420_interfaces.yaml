@@ -1,0 +1,68 @@
+---
+- name: Configuration network interface
+  hosts: hvzr-fank
+  gather_facts: yes
+
+  vars_prompt:
+    - name: "ipaddress"
+      prompt: "Enter interface ipaddress"
+      private: no
+    - name: "subnetmask"
+      prompt: "Enter interface subnetmask"
+      private: no
+    - name: "gateway"
+      prompt: "Enter interface gateway"
+      private: no
+    - name: "cloudbr36"
+      prompt: "Enter interface cloudbr36"
+      private: no
+    - name: "vlid"
+      prompt: "Enter hostname vlid"
+      private: no
+  tasks:	  
+    - name: Removing existing network interface files for p3p1
+      shell: mv /etc/sysconfig/network-scripts/ifcfg-p3p1 /root/
+    - name: Removing existing network interface files for p3p2
+      shell: mv /etc/sysconfig/network-scripts/ifcfg-p3p2 /root/
+    - name: Configuration network interface files for p3p1
+      copy:
+       src: ifcfg-p3p1
+       dest: /etc/sysconfig/network-scripts/
+    - name: Configuration network interface files for p3p2
+      copy:
+       src: ifcfg-p3p2
+       dest: /etc/sysconfig/network-scripts/
+    - name: Configuration Bonding files for p3p1 & p3p2 interface
+      copy:
+       src: ifcfg-bond0
+       dest: /etc/sysconfig/network-scripts/
+    - name: Configuration cloudbr0 bridge files
+      copy:
+       src: ifcfg-cloudbr0
+       dest: /etc/sysconfig/network-scripts/
+    - name: Creating ipaddress
+      shell: sed -i  's|IPADDR=<ip_address>|IPADDR="{{ ipaddress }}"|g' /etc/sysconfig/network-scripts/ifcfg-cloudbr0
+    - name: Creating subnetmask
+      shell: sed -i  's|NETMASK=<ip_address>|NETMASK="{{ subnetmask }}"|g' /etc/sysconfig/network-scripts/ifcfg-cloudbr0
+    - name : Creating gateway
+      shell: sed -i  's|GATEWAY=<ip_address>|GATEWAY="{{ gateway }}"|g' /etc/sysconfig/network-scripts/ifcfg-cloudbr0
+    - name: Configuration cloudbr36 bridge files
+      copy:
+       src: ifcfg-cloudbr36
+       dest: /etc/sysconfig/network-scripts/
+    - name: Creating storage ipaddress
+      shell: sed -i  's|IPADDR=<ip_address>|IPADDR="{{ cloudbr36 }}"|g' /etc/sysconfig/network-scripts/ifcfg-cloudbr36
+    - name : Configure of hostname
+      lineinfile:
+       path: /etc/hosts
+       line: '{{ ipaddress }}   {{ vlid }}'
+    - name: Restart openvswitch service
+      service:
+       name: openvswitch
+       state: restarted
+       enabled: yes
+    - name: Restart Network service
+      service:
+       name: network
+       state: restarted
+       enabled: yes
